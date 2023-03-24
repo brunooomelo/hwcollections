@@ -1,7 +1,18 @@
-import { Button, Checkbox, Flex, Group, Input, Modal } from "@mantine/core";
+import {
+  ActionIcon,
+  Box,
+  Button,
+  Checkbox,
+  Flex,
+  Group,
+  Input,
+  Modal,
+  Textarea,
+} from "@mantine/core";
 import { useEffect, useState } from "react";
 import { nanoid } from "nanoid";
-import { useLocalStorage } from "@mantine/hooks";
+import { useDisclosure, useLocalStorage } from "@mantine/hooks";
+import { DownloadSimple, FloppyDisk } from "@phosphor-icons/react";
 
 type ItemProps = {
   onCheckHandler: (checked: boolean) => void;
@@ -29,11 +40,14 @@ type Wishlist = {
 } & List;
 
 function App() {
-  const [opened, setOpened] = useState(false);
+  const [checkIfNeedSave, setCheckIfNeedSave] = useState(false);
+  const [addHotWheelsModalOpened, addHotWheelsModal] = useDisclosure();
+  const [importModalOpened, importModal] = useDisclosure();
   const [hws, setHws] = useState<Wishlist[]>([]);
   const [input, setInput] = useState("");
   const [localStorageValue, setLocalStorage] = useLocalStorage<Wishlist[]>({
     key: "hotwheels",
+    defaultValue: [],
   });
 
   const handlerSubmit = () => {
@@ -42,22 +56,47 @@ function App() {
       ...prev,
       {
         id: nanoid(),
-        name: input,
+        name: input.toUpperCase(),
         checked: false,
       },
     ]);
     setInput("");
-    setOpened(false);
+    setCheckIfNeedSave(true);
+    addHotWheelsModal.close();
+  };
+
+  const importHandleSubmit = () => {
+    if (!input) return;
+    const hotWheelsImported = input
+      .split("\n")
+      .map((hotWheel) => hotWheel.trim())
+      .filter((hotWheel) => !!hotWheel)
+      .filter((hotWheel) => !hws.some((hw) => hotWheel.includes(hw.name)))
+      .map(
+        (hotWheel) =>
+          ({
+            id: nanoid(),
+            name: hotWheel,
+            checked: false,
+          } as Wishlist)
+      );
+
+    setHws((prev) => [...prev, ...hotWheelsImported]);
+    setCheckIfNeedSave(true);
+    setInput("");
+    importModal.close();
   };
 
   const changeCheckedById = (id: string, checked: boolean) => {
     setHws((prev) =>
       prev.map((pv) => (pv.id === id ? { ...pv, checked } : pv))
     );
+    setCheckIfNeedSave(true);
   };
 
   const saveLocalStorage = () => {
     setLocalStorage(hws);
+    setCheckIfNeedSave(false);
   };
 
   const getLocalStorage = () => {
@@ -73,33 +112,46 @@ function App() {
   }, [localStorageValue]);
 
   return (
-    <div>
-      <Flex gap="sm" align="center">
-        <h1>Wishlist</h1>{" "}
-        {!!hws.length && (
-          <strong>
-            {hws.length - toBuy.length}/{hws.length}
-          </strong>
-        )}{" "}
-        <Group position="center">
-          <Button onClick={() => setOpened(true)}>Add a hot wheels</Button>
-          <Button onClick={saveLocalStorage}>Save</Button>
+    <Flex direction="column" p="24px">
+      <Flex gap="sm" align="center" justify="space-between">
+        <Group spacing="xs">
+          <h3>Wishlist</h3>
+          {!!hws.length && (
+            <strong>
+              {hws.length - toBuy.length}/{hws.length}
+            </strong>
+          )}
+        </Group>
+        <Group position="center" spacing="xs">
+          <ActionIcon onClick={importModal.open}>
+            <DownloadSimple size={24} />
+          </ActionIcon>
+          {checkIfNeedSave && (
+            <ActionIcon onClick={saveLocalStorage} color="blue">
+              <FloppyDisk size={24} />
+            </ActionIcon>
+          )}
+          <Button onClick={addHotWheelsModal.open} size="xs">
+            New Item
+          </Button>
         </Group>
       </Flex>
       <Flex px="sm" direction="column">
-        {hws.map((hw) => {
-          return (
-            <Item
-              {...hw}
-              key={hw.id}
-              onCheckHandler={(checked) => changeCheckedById(hw.id, checked)}
-            />
-          );
-        })}
+        {hws
+          .sort((hw) => (!hw.checked ? -1 : 1))
+          .map((hw) => {
+            return (
+              <Item
+                {...hw}
+                key={hw.id}
+                onCheckHandler={(checked) => changeCheckedById(hw.id, checked)}
+              />
+            );
+          })}
       </Flex>
       <Modal
-        opened={opened}
-        onClose={() => setOpened(false)}
+        opened={addHotWheelsModalOpened}
+        onClose={addHotWheelsModal.close}
         title="Add your hot wheels!"
       >
         <Flex gap="sm" direction="column">
@@ -107,11 +159,32 @@ function App() {
             placeholder="Hot wheels name"
             onChange={(e: any) => setInput(e.target.value)}
             value={input}
+            sx={{
+              textTransform: "uppercase",
+            }}
           />
           <Button onClick={handlerSubmit}>Add it</Button>
         </Flex>
       </Modal>
-    </div>
+
+      <Modal
+        opened={importModalOpened}
+        onClose={importModal.close}
+        title="Import your text of the hot wheels!"
+      >
+        <Flex gap="sm" direction="column">
+          <Textarea
+            placeholder="Paste it"
+            onChange={(e: any) => setInput(e.target.value)}
+            value={input}
+            sx={{
+              textTransform: "uppercase",
+            }}
+          />
+          <Button onClick={importHandleSubmit}>Import it</Button>
+        </Flex>
+      </Modal>
+    </Flex>
   );
 }
 
