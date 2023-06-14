@@ -13,6 +13,7 @@ import { useEffect, useState } from "react";
 import { nanoid } from "nanoid";
 import { useDisclosure, useLocalStorage } from "@mantine/hooks";
 import { DownloadSimple, FloppyDisk } from "@phosphor-icons/react";
+import { Header } from "./shared/components/header";
 
 type ItemProps = {
   onCheckHandler: (checked: boolean) => void;
@@ -74,11 +75,11 @@ function App() {
       .filter((hotWheel) => !hws.some((hw) => hotWheel.includes(hw.name)))
       .map(
         (hotWheel) =>
-          ({
-            id: nanoid(),
-            name: hotWheel,
-            checked: false,
-          } as Wishlist)
+        ({
+          id: nanoid(),
+          name: hotWheel,
+          checked: false,
+        } as Wishlist)
       );
 
     setHws((prev) => [...prev, ...hotWheelsImported]);
@@ -113,6 +114,7 @@ function App() {
 
   return (
     <Flex direction="column" p="24px">
+      <Header />
       <Flex gap="sm" align="center" justify="space-between">
         <Group spacing="xs">
           <h3>Wishlist</h3>
