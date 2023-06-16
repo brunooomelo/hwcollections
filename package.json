@@ -11,14 +11,21 @@
   "dependencies": {
     "@emotion/react": "^11.10.6",
     "@headlessui/react": "^1.7.15",
+    "@hookform/resolvers": "^3.1.1",
     "@mantine/core": "^6.0.13",
     "@mantine/hooks": "^6.0.13",
     "@phosphor-icons/react": "^2.0.6",
+    "@prisma/client": "4.15.0",
     "@supabase/supabase-js": "^2.15.0",
     "@tanstack/react-location": "^3.7.4",
+    "@tanstack/react-query": "^4.29.13",
+    "classnames": "^2.3.2",
     "nanoid": "^4.0.1",
     "react": "^18.2.0",
-    "react-dom": "^18.2.0"
+    "react-dom": "^18.2.0",
+    "react-hook-form": "^7.44.3",
+    "react-toast-notifications": "^2.5.1",
+    "zod": "^3.21.4"
   },
   "devDependencies": {
     "@types/react": "^18.0.27",

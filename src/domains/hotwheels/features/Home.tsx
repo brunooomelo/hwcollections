@@ -1,24 +1,20 @@
 import {
   ActionIcon,
-  Button,
   Flex,
   Group,
   Input,
   Modal,
   Textarea,
 } from "@mantine/core";
-import { Fragment, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { nanoid } from "nanoid";
 import { useDisclosure, useLocalStorage } from "@mantine/hooks";
-import { DotsThreeVertical, DownloadSimple, FloppyDisk } from "@phosphor-icons/react";
+import { DownloadSimple, FloppyDisk, UploadSimple } from "@phosphor-icons/react";
 import { Header } from "../../../shared/components/Header";
-import { Menu, Transition } from "@headlessui/react";
 import { Wishlist } from "../@types";
-
-function classNames(...classes: any[]) {
-  return classes.filter(Boolean).join(' ')
-}
-
+import { useToasts } from "react-toast-notifications";
+import { Item } from "../components/Item";
+import { Button } from "../../../shared/components/Button";
 
 export function Home() {
   const [checkIfNeedSave, setCheckIfNeedSave] = useState(false);
@@ -26,23 +22,40 @@ export function Home() {
   const [importModalOpened, importModal] = useDisclosure();
   const [hws, setHws] = useState<Wishlist[]>([]);
   const [input, setInput] = useState("");
+  const [id, setId] = useState<string | null>(null)
   const [localStorageValue, setLocalStorage] = useLocalStorage<Wishlist[]>({
     key: "hotwheels",
     defaultValue: [],
   });
 
+  const { addToast } = useToasts();
+
   const handlerSubmit = () => {
     if (!input) return;
-    setHws((prev) => [
-      ...prev,
-      {
-        id: nanoid(),
-        name: input.toUpperCase(),
-        checked: false,
-      },
-    ]);
+    if (id) {
+      console.log(input.toUpperCase())
+      setHws(prev => prev.map((p) => {
+        if (p.id === id) {
+          p.name = input.toUpperCase()
+        }
+        return p
+      }))
+
+    } else {
+      setHws((prev) => [
+        ...prev,
+        {
+          id: nanoid(),
+          name: input.toUpperCase(),
+          checked: false,
+        },
+      ]);
+    }
+    setId(null)
     setInput("");
     setCheckIfNeedSave(true);
+    addToast(id ? 'Edited Successfully' : 'Saved Successfully', { appearance: 'success' });
+
     addHotWheelsModal.close();
   };
 
@@ -88,15 +101,21 @@ export function Home() {
 
   const toBuy = hws.filter((hw) => !hw.checked);
 
+  const onEdit = (id: string, value: string) => {
+    setId(id)
+    setInput(value)
+    addHotWheelsModal.open()
+  }
+
   useEffect(() => {
     getLocalStorage();
   }, [localStorageValue]);
 
   return (
-    <Flex direction="column" p="24px" gap="md">
+    <div className="flex flex-col p-8 gap-8">
       <Header />
       <fieldset>
-        <Flex gap="sm" align="center" justify="space-between">
+        <div className="flex flex-col xs:flex-row items-center justify-between">
           <legend className="text-base font-semibold leading-6 text-gray-900 flex gap-3">
             <span>
               Collection
@@ -107,7 +126,11 @@ export function Home() {
               </strong>
             )}
           </legend>
-          <Group position="center" spacing="xs">
+
+          <div className="flex items-center gap-2 w-full justify-end">
+            <ActionIcon onClick={() => navigator.clipboard.writeText(JSON.stringify(hws))}>
+              <UploadSimple size={24} />
+            </ActionIcon>
             <ActionIcon onClick={importModal.open}>
               <DownloadSimple size={24} />
             </ActionIcon>
@@ -116,95 +139,41 @@ export function Home() {
                 <FloppyDisk size={24} />
               </ActionIcon>
             )}
-            <Button onClick={addHotWheelsModal.open} size="xs">
+            <Button
+              onClick={addHotWheelsModal.open}
+              className="max-w-[100px]"
+            >
               New Item
             </Button>
-          </Group>
 
-        </Flex>
+          </div>
+        </div>
 
         <div className="mt-4 divide-y divide-gray-200 border-b border-t border-gray-200">
           {hws
             .sort((hw) => (!hw.checked ? -1 : 1))
             .map((hw) => (
-              <label htmlFor={hw.id} key={hw.id} className="relative  cursor-pointer flex gap-3 py-4 justify-between">
-                <div className='flex gap-3 items-center'>
-                  <input
-                    id={hw.id}
-                    name={hw.id}
-                    type="checkbox"
-                    className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-600"
-                    checked={hw.checked}
-                    onChange={(e) => changeCheckedById(hw.id, e.target.checked)}
+              <Item
+                id={hw.id}
+                checked={hw.checked}
+                name={hw.name}
+                key={hw.id}
+                onEdit={() => onEdit(hw.id, hw.name)}
+                onCheckHandler={(isChecked) =>
+                  changeCheckedById(hw.id, isChecked)
+                }
+                onDelete={() => {
+                  addToast('Deleted Successfully', { appearance: 'success' });
+                  setHws(prev =>
+                    prev.filter(p => p.id !== hw.id)
+                  )
+                  setCheckIfNeedSave(true)
 
-                  />
-                  <div className="flex h-6 items-center">
-                    <div className="select-none font-medium text-gray-900">
-                      {hw.name}
-                    </div>
-                  </div>
-                </div>
-                <Menu as="div" className="relative flex-none">
-                  <Menu.Button className="-m-2.5 block p-2.5 text-gray-500 hover:text-gray-900">
-                    <span className="sr-only">Open options</span>
-                    <DotsThreeVertical className="h-5 w-5" aria-hidden="true" />
-                  </Menu.Button>
-                  <Transition
-                    as={Fragment}
-                    enter="transition ease-out duration-100"
-                    enterFrom="transform opacity-0 scale-95"
-                    enterTo="transform opacity-100 scale-100"
-                    leave="transition ease-in duration-75"
-                    leaveFrom="transform opacity-100 scale-100"
-                    leaveTo="transform opacity-0 scale-95"
-                  >
-                    <Menu.Items className="absolute right-0 z-10 mt-2 w-32 origin-top-right rounded-md bg-white py-2 shadow-lg ring-1 ring-gray-900/5 focus:outline-none">
-                      <Menu.Item>
-                        {({ active }) => (
-                          <a
-                            href="#"
-                            className={classNames(
-                              active ? 'bg-gray-50' : '',
-                              'block px-3 py-1 text-sm leading-6 text-gray-900'
-                            )}
-                          >
-                            Edit<span className="sr-only">, {hw.name}</span>
-                          </a>
-                        )}
-                      </Menu.Item>
-                      <Menu.Item>
-                        {({ active }) => (
-                          <a
-                            href="#"
-                            className={classNames(
-                              active ? 'bg-gray-50' : '',
-                              'block px-3 py-1 text-sm leading-6 text-gray-900'
-                            )}
-                          >
-                            Move<span className="sr-only">, {hw.name}</span>
-                          </a>
-                        )}
-                      </Menu.Item>
-                      <Menu.Item>
-                        {({ active }) => (
-                          <a
-                            href="#"
-                            className={classNames(
-                              active ? 'bg-gray-50' : '',
-                              'block px-3 py-1 text-sm leading-6 text-gray-900'
-                            )}
-                          >
-                            Delete<span className="sr-only">, {hw.name}</span>
-                          </a>
-                        )}
-                      </Menu.Item>
-                    </Menu.Items>
-                  </Transition>
-                </Menu>
-              </label>
+                }}
+              />
             ))}
         </div>
-      </fieldset>
+      </fieldset >
       <Modal
         opened={addHotWheelsModalOpened}
         onClose={addHotWheelsModal.close}
@@ -219,7 +188,7 @@ export function Home() {
               textTransform: "uppercase",
             }}
           />
-          <Button onClick={handlerSubmit}>Add it</Button>
+          <Button onClick={handlerSubmit}>{id ? 'Edit it' : 'Add it'}</Button>
         </Flex>
       </Modal>
 
@@ -236,10 +205,25 @@ export function Home() {
             sx={{
               textTransform: "uppercase",
             }}
+            onPaste={(e) => {
+              const pasteData = e.clipboardData.getData('text')
+              try {
+                const itPrased = JSON.parse(pasteData)
+                setLocalStorage(itPrased)
+                setHws(itPrased)
+                setCheckIfNeedSave(false)
+
+              } catch (error) {
+              }
+              finally {
+                importModal.close()
+                setInput('')
+              }
+            }}
           />
           <Button onClick={importHandleSubmit}>Import it</Button>
         </Flex>
       </Modal>
-    </Flex>
+    </div>
   );
 }
