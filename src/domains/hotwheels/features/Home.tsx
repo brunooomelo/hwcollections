@@ -1,115 +1,135 @@
 import {
   ActionIcon,
   Flex,
-  Group,
-  Input,
   Modal,
-  Textarea,
 } from "@mantine/core";
-import { useEffect, useState } from "react";
-import { nanoid } from "nanoid";
+import { useState } from "react";
 import { useDisclosure, useLocalStorage } from "@mantine/hooks";
-import { DownloadSimple, FloppyDisk, UploadSimple } from "@phosphor-icons/react";
-import { Header } from "../../../shared/components/Header";
-import { Wishlist } from "../@types";
+import { CloudArrowUp } from "@phosphor-icons/react";
+import { IItem, Wishlist } from "../@types";
 import { useToasts } from "react-toast-notifications";
+import { Header } from "../../../shared/components/Header";
 import { Item } from "../components/Item";
 import { Button } from "../../../shared/components/Button";
+import { supabase } from "../../../shared/lib/supabase";
+import { useAuth } from "../../../shared/hooks/useAuth";
+import { useMutation, useQuery } from "@tanstack/react-query";
+import { HotWheelForm } from "../components/forms/HotWheelForm";
 
 export function Home() {
-  const [checkIfNeedSave, setCheckIfNeedSave] = useState(false);
+  const { session } = useAuth()
+  const { addToast } = useToasts();
+  const [id, setId] = useState<string | null>(null)
   const [addHotWheelsModalOpened, addHotWheelsModal] = useDisclosure();
   const [importModalOpened, importModal] = useDisclosure();
-  const [hws, setHws] = useState<Wishlist[]>([]);
-  const [input, setInput] = useState("");
-  const [id, setId] = useState<string | null>(null)
+
   const [localStorageValue, setLocalStorage] = useLocalStorage<Wishlist[]>({
     key: "hotwheels",
     defaultValue: [],
   });
 
-  const { addToast } = useToasts();
+  const { data, refetch } = useQuery({
+    queryFn: async () => {
+      const { data } = await supabase.from('items').select('*').neq('is_active', false).order('is_done', { ascending: true }).returns<IItem[]>().throwOnError()
+      return data
+    },
+    queryKey: ['hotwheels']
+  })
 
-  const handlerSubmit = () => {
-    if (!input) return;
-    if (id) {
-      console.log(input.toUpperCase())
-      setHws(prev => prev.map((p) => {
-        if (p.id === id) {
-          p.name = input.toUpperCase()
-        }
-        return p
-      }))
-
-    } else {
-      setHws((prev) => [
-        ...prev,
-        {
-          id: nanoid(),
-          name: input.toUpperCase(),
-          checked: false,
-        },
-      ]);
+  const editable = data?.find(d => d.id === id)?.name
+  const editableData = () => {
+    if (editable) {
+      const [lote, name] = editable.split(']').map(chunk => chunk.trim().replace('[', ''))
+      return {
+        lote, name
+      }
     }
-    setId(null)
-    setInput("");
-    setCheckIfNeedSave(true);
-    addToast(id ? 'Edited Successfully' : 'Saved Successfully', { appearance: 'success' });
-
-    addHotWheelsModal.close();
-  };
-
-  const importHandleSubmit = () => {
-    if (!input) return;
-    const hotWheelsImported = input
-      .split("\n")
-      .map((hotWheel) => hotWheel.trim())
-      .filter((hotWheel) => !!hotWheel)
-      .filter((hotWheel) => !hws.some((hw) => hotWheel.includes(hw.name)))
-      .map(
-        (hotWheel) =>
-        ({
-          id: nanoid(),
-          name: hotWheel,
-          checked: false,
-        } as Wishlist)
-      );
-
-    setHws((prev) => [...prev, ...hotWheelsImported]);
-    setCheckIfNeedSave(true);
-    setInput("");
-    importModal.close();
-  };
-
-  const changeCheckedById = (id: string, checked: boolean) => {
-    setHws((prev) =>
-      prev.map((pv) => (pv.id === id ? { ...pv, checked } : pv))
-    );
-    setCheckIfNeedSave(true);
-  };
-
-  const saveLocalStorage = () => {
-    setLocalStorage(hws);
-    setCheckIfNeedSave(false);
-  };
-
-  const getLocalStorage = () => {
-    if (!hws.length && !!localStorageValue) {
-      setHws(localStorageValue);
-    }
-  };
-
-  const toBuy = hws.filter((hw) => !hw.checked);
-
-  const onEdit = (id: string, value: string) => {
-    setId(id)
-    setInput(value)
-    addHotWheelsModal.open()
+    return undefined
   }
 
-  useEffect(() => {
-    getLocalStorage();
-  }, [localStorageValue]);
+
+  const addHotWheel = useMutation({
+    mutationFn: async (data: Omit<IItem, 'id'>) => {
+      await supabase.from('items').insert(data).throwOnError()
+    },
+    onSuccess: () => {
+      addToast('Saved Successfully', { appearance: 'success' });
+      addHotWheelsModal.close()
+    }
+  })
+
+  const editHotWheel = useMutation({
+    mutationFn: async (data: Partial<IItem>) => {
+      const { id, ...updateData } = data
+      await supabase.from('items').update(updateData).
+        eq('id', id).throwOnError()
+    },
+    onSuccess: () => {
+      setId(null)
+      addToast('Edited Successfully', { appearance: 'success' });
+      addHotWheelsModal.close()
+    }
+  })
+
+  const changeDoneById = useMutation({
+    mutationFn: async ({ id, isDone }: { id: string; isDone: boolean }) => {
+      await supabase.from('items').update<Partial<IItem>>({
+        is_done: isDone
+      }).
+        eq('id', id).throwOnError()
+    },
+    onSuccess: () => {
+      refetch()
+    }
+  })
+
+  const deleteHotWheel = useMutation({
+    mutationFn: async (id: string) => {
+      await supabase.from('items').update<Partial<IItem>>({
+        is_active: false
+      }).
+        eq('id', id).throwOnError()
+    },
+    onSuccess: () => {
+      addToast('Deleted Successfully', { appearance: 'success' });
+    }
+  })
+  const importHotWheels = useMutation({
+    mutationFn: async (hws: Wishlist[]) => {
+      await supabase.from('items').insert<Omit<IItem, 'id'>[]>(
+        hws.map((hw) => ({
+          description: '',
+          is_active: true,
+          is_done: hw.checked,
+          name: hw.name,
+          owner: session!.user.id
+        })
+        )
+      ).throwOnError()
+    },
+    onSuccess: () => {
+      setLocalStorage([])
+      addToast('Imported Successfully', { appearance: 'success' });
+      importModal.close();
+    }
+  })
+
+
+  const importHandleSubmit = async () => importHotWheels.mutateAsync(localStorageValue)
+
+  const changeCheckedById = async (id: string, checked: boolean) => {
+    await changeDoneById.mutateAsync({
+      id,
+      isDone: checked
+    })
+  };
+
+  const hwIsDone = data?.filter((hw) => !hw.is_done);
+
+  const onEdit = (id: string) => {
+    setId(id)
+    addHotWheelsModal.open()
+  }
 
   return (
     <div className="flex flex-col p-8 gap-8">
@@ -120,23 +140,17 @@ export function Home() {
             <span>
               Collection
             </span>
-            {!!hws.length && (
+            {!!data?.length && !!hwIsDone && (
               <strong>
-                {hws.length - toBuy.length}/{hws.length}
+                {data.length - hwIsDone.length}/{data.length}
               </strong>
             )}
           </legend>
 
           <div className="flex items-center gap-2 w-full justify-end">
-            <ActionIcon onClick={() => navigator.clipboard.writeText(JSON.stringify(hws))}>
-              <UploadSimple size={24} />
-            </ActionIcon>
-            <ActionIcon onClick={importModal.open}>
-              <DownloadSimple size={24} />
-            </ActionIcon>
-            {checkIfNeedSave && (
-              <ActionIcon onClick={saveLocalStorage} color="blue">
-                <FloppyDisk size={24} />
+            {!!localStorageValue.length && (
+              <ActionIcon onClick={importModal.open}>
+                <CloudArrowUp size={24} />
               </ActionIcon>
             )}
             <Button
@@ -150,28 +164,21 @@ export function Home() {
         </div>
 
         <div className="mt-4 divide-y divide-gray-200 border-b border-t border-gray-200">
-          {hws
-            .sort((hw) => (!hw.checked ? -1 : 1))
-            .map((hw) => (
-              <Item
-                id={hw.id}
-                checked={hw.checked}
-                name={hw.name}
-                key={hw.id}
-                onEdit={() => onEdit(hw.id, hw.name)}
-                onCheckHandler={(isChecked) =>
-                  changeCheckedById(hw.id, isChecked)
-                }
-                onDelete={() => {
-                  addToast('Deleted Successfully', { appearance: 'success' });
-                  setHws(prev =>
-                    prev.filter(p => p.id !== hw.id)
-                  )
-                  setCheckIfNeedSave(true)
-
-                }}
-              />
-            ))}
+          {data?.map((hw) => (
+            <Item
+              id={hw.id}
+              checked={hw.is_done}
+              name={hw.name}
+              key={hw.id}
+              onEdit={() => onEdit(hw.id)}
+              onCheckHandler={(isChecked) =>
+                changeCheckedById(hw.id, isChecked)
+              }
+              onDelete={() => {
+                deleteHotWheel.mutateAsync(hw.id)
+              }}
+            />
+          ))}
         </div>
       </fieldset >
       <Modal
@@ -179,49 +186,36 @@ export function Home() {
         onClose={addHotWheelsModal.close}
         title="Add your hot wheels!"
       >
-        <Flex gap="sm" direction="column">
-          <Input
-            placeholder="Hot wheels name"
-            onChange={(e: any) => setInput(e.target.value)}
-            value={input}
-            sx={{
-              textTransform: "uppercase",
-            }}
-          />
-          <Button onClick={handlerSubmit}>{id ? 'Edit it' : 'Add it'}</Button>
-        </Flex>
+        <HotWheelForm
+          onSubmit={async ({ lote, name }) => {
+            if (editable && id) {
+              await editHotWheel.mutateAsync({
+                id,
+                name: `${!!lote ? `[${lote.toUpperCase()}]` : ''} ${name.toUpperCase()}`,
+              })
+            } else {
+              await addHotWheel.mutateAsync({
+                name: `${!!lote ? `[${lote.toUpperCase()}]` : ''} ${name.toUpperCase()}`,
+                description: '',
+                is_active: true,
+                is_done: false,
+                owner: session!.user.id
+              })
+            }
+
+          }}
+          isEditable={!!editable}
+          defaultValues={editableData()}
+        />
       </Modal>
 
       <Modal
         opened={importModalOpened}
         onClose={importModal.close}
-        title="Import your text of the hot wheels!"
+        title="Import your HotWheels in localstore to cloud!"
       >
         <Flex gap="sm" direction="column">
-          <Textarea
-            placeholder="Paste it"
-            onChange={(e: any) => setInput(e.target.value)}
-            value={input}
-            sx={{
-              textTransform: "uppercase",
-            }}
-            onPaste={(e) => {
-              const pasteData = e.clipboardData.getData('text')
-              try {
-                const itPrased = JSON.parse(pasteData)
-                setLocalStorage(itPrased)
-                setHws(itPrased)
-                setCheckIfNeedSave(false)
-
-              } catch (error) {
-              }
-              finally {
-                importModal.close()
-                setInput('')
-              }
-            }}
-          />
-          <Button onClick={importHandleSubmit}>Import it</Button>
+          <Button onClick={importHandleSubmit}>Import to cloud</Button>
         </Flex>
       </Modal>
     </div>
