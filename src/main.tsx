@@ -1,7 +1,7 @@
 import { MantineProvider } from "@mantine/core";
 import { ToastProvider } from 'react-toast-notifications';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { ReactLocation, Router } from "@tanstack/react-location";
+import { Outlet, ReactLocation, Router } from "@tanstack/react-location";
 import React, { } from "react";
 import ReactDOM from "react-dom/client";
 import { routes } from "./shared/routes";
@@ -23,10 +23,11 @@ ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
     <ToastProvider>
       <QueryClientProvider client={queryClient}>
         <MantineProvider withNormalizeCSS withGlobalStyles>
-          <AuthProvider>
-            <Router location={location} routes={routes} />
-          </AuthProvider>
-
+          <Router location={location} routes={routes}>
+            <AuthProvider>
+              <Outlet />
+            </AuthProvider>
+          </Router>
         </MantineProvider>
       </QueryClientProvider>
     </ToastProvider>

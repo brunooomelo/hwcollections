@@ -4,7 +4,7 @@ import { Navigate } from "@tanstack/react-location";
 import { Button } from "../../../shared/components/Button";
 
 
-function Login() {
+export function Login() {
   const { isLogged, isLoading, signInWithProvider } = useAuth();
 
   if (!isLoading && isLogged) {
@@ -31,5 +31,3 @@ function Login() {
 
   ) : null
 }
-
-export default Login;
