@@ -11,10 +11,12 @@ import { useToasts } from "react-toast-notifications";
 import { Header } from "../../../shared/components/Header";
 import { Item } from "../components/Item";
 import { Button } from "../../../shared/components/Button";
-import { supabase } from "../../../shared/lib/supabase";
+// import { supabase } from "../../../shared/lib/supabase";
 import { useAuth } from "../../../shared/hooks/useAuth";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { HotWheelForm } from "../components/forms/HotWheelForm";
+import { database } from "../../../shared/lib/firebase";
+
 
 export function Home() {
   const { session } = useAuth()
@@ -30,7 +32,25 @@ export function Home() {
 
   const { data, refetch } = useQuery({
     queryFn: async () => {
-      const { data } = await supabase.from('items').select('*').neq('is_active', false).order('is_done', { ascending: true }).returns<IItem[]>().throwOnError()
+      const data = await database
+        .collection('hws')
+        .where('is_active', '==', true)
+        .get().then(docs => {
+          const data = [] as IItem[]
+          if (docs.empty) {
+            return data
+          }
+          docs.forEach(doc => {
+            const docId = doc.id
+            const docData = doc.data()
+            data.push({
+              id: docId,
+              ...docData
+            } as IItem)
+
+          })
+          return data
+        })
       return data
     },
     queryKey: ['hotwheels']
@@ -50,7 +70,7 @@ export function Home() {
 
   const addHotWheel = useMutation({
     mutationFn: async (data: Omit<IItem, 'id'>) => {
-      await supabase.from('items').insert(data).throwOnError()
+      await database.collection('hws').add(data)
     },
     onSuccess: () => {
       addToast('Saved Successfully', { appearance: 'success' });
@@ -61,8 +81,7 @@ export function Home() {
   const editHotWheel = useMutation({
     mutationFn: async (data: Partial<IItem>) => {
       const { id, ...updateData } = data
-      await supabase.from('items').update(updateData).
-        eq('id', id).throwOnError()
+      await database.collection('hws').doc(id).update(updateData)
     },
     onSuccess: () => {
       setId(null)
@@ -73,10 +92,9 @@ export function Home() {
 
   const changeDoneById = useMutation({
     mutationFn: async ({ id, isDone }: { id: string; isDone: boolean }) => {
-      await supabase.from('items').update<Partial<IItem>>({
+      await database.collection('hws').doc(id).update({
         is_done: isDone
-      }).
-        eq('id', id).throwOnError()
+      })
     },
     onSuccess: () => {
       refetch()
@@ -85,10 +103,9 @@ export function Home() {
 
   const deleteHotWheel = useMutation({
     mutationFn: async (id: string) => {
-      await supabase.from('items').update<Partial<IItem>>({
+      await database.collection('hws').doc(id).update({
         is_active: false
-      }).
-        eq('id', id).throwOnError()
+      })
     },
     onSuccess: () => {
       addToast('Deleted Successfully', { appearance: 'success' });
@@ -96,16 +113,16 @@ export function Home() {
   })
   const importHotWheels = useMutation({
     mutationFn: async (hws: Wishlist[]) => {
-      await supabase.from('items').insert<Omit<IItem, 'id'>[]>(
-        hws.map((hw) => ({
-          description: '',
-          is_active: true,
-          is_done: hw.checked,
-          name: hw.name,
-          owner: session!.user.id
-        })
-        )
-      ).throwOnError()
+      // await supabase.from('items').insert<Omit<IItem, 'id'>[]>(
+      //   hws.map((hw) => ({
+      //     description: '',
+      //     is_active: true,
+      //     is_done: hw.checked,
+      //     name: hw.name,
+      //     owner: session!.user.id
+      //   })
+      //   )
+      // ).throwOnError()
     },
     onSuccess: () => {
       setLocalStorage([])
@@ -199,7 +216,7 @@ export function Home() {
                 description: '',
                 is_active: true,
                 is_done: false,
-                owner: session!.user.id
+                owner: session!.uid
               })
             }
 
