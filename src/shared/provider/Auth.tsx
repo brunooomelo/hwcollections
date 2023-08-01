@@ -1,49 +1,50 @@
+import firebase from 'firebase'
 import { ReactNode, useEffect, useState } from "react";
-import { AuthContext } from "../context/AuthContext";
-import { supabase } from "../lib/supabase";
-import { Provider, Session } from "@supabase/supabase-js";
+import { auth } from "../../shared/lib/firebase";
+import { getProvider, Provider } from "../../shared/utils/provider";
+import { AuthContext } from "../../shared/context/AuthContext";
+import { useNavigate } from '@tanstack/react-location';
 
 type AuthProviderProps = {
   children: ReactNode;
 };
+
+
 export const AuthProvider = ({ children }: AuthProviderProps) => {
-  const [session, setSession] = useState<Session | null>(null);
+  const navigate = useNavigate()
+  const [session, setSession] = useState<firebase.User | null>(null);
   const [isLoading, setIsLoading] = useState(true)
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
-    }).finally(() => {
+    auth.onAuthStateChanged((user: firebase.User | null) => {
+      if (user) {
+        setSession(user);
+        navigate({ to: '/' })
+      } else {
+        navigate({ to: '/login' })
+      }
       setIsLoading(false)
     })
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, session) => {
-      setSession(session);
-    });
-
-    return () => subscription.unsubscribe();
   }, []);
 
   async function signInWithProvider(provider: Provider) {
+    const instance = getProvider(provider)
     try {
       setIsLoading(true)
-      const { error, data } = await supabase.auth.signInWithOAuth({
-        provider
-      })
-
-      if (error) {
-        throw error
-      }
-      return data
+      await auth.signInWithPopup(instance)
     } catch (error) {
+      console.error('Erro ao fazer login com o Google:', error);
+    } finally {
       setIsLoading(false)
     }
   }
 
 
   async function signout() {
-    await supabase.auth.signOut();
+    setSession(null)
+    await auth.signOut();
+    navigate({ to: '/login' })
+
   }
 
   return (
