@@ -35,6 +35,7 @@ export function Home() {
       const data = await database
         .collection('hws')
         .where('is_active', '==', true)
+        .where('owner', '==', session!.uid)
         .get().then(docs => {
           const data = [] as IItem[]
           if (docs.empty) {
